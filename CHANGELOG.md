@@ -4,6 +4,17 @@ All notable changes to `trade-dashboard-desktop` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-09-23
+
+### Added
+- New **Paper** tab wired to the `trade-paper` engine (lazy optional import):
+  paper account/equity/buying power, open positions, strategy-approval queue
+  with one-click approve, and a fidelity report comparing backtest slippage
+  assumptions to realized paper slippage. Jobs run off the tkinter UI thread.
+- New engine services `paper_available`, `paper_status`, `paper_approvals`,
+  `paper_approve`, `paper_fidelity` — identical names and signatures in the
+  shared web engine and the bundled stdlib fallback.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added

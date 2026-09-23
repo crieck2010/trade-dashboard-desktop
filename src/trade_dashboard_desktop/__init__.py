@@ -8,4 +8,4 @@ Launch with ``python -m trade_dashboard_desktop`` or the
 ``trade-dashboard-desktop`` console script.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

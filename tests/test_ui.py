@@ -10,13 +10,15 @@ from trade_dashboard_desktop.ui.tabs import (
     backtest_tab,
     data_tab,
     desk_tab,
+    paper_tab,
     risk_tab,
     strategies_tab,
 )
 
 
 def test_all_tabs_expose_build():
-    for module in (backtest_tab, data_tab, desk_tab, risk_tab, strategies_tab):
+    for module in (backtest_tab, data_tab, desk_tab, paper_tab, risk_tab,
+                   strategies_tab):
         assert callable(getattr(module, "build", None)), module.__name__
 
 

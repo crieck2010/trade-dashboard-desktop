@@ -24,6 +24,7 @@ Part of the trade-suite: one pure-Python repo per module
 | **Strategies** | Browse the `trade-strategies` registry: family, description, parameters, warmup bars. |
 | **Agent Desk** | Run the `trade-agents` research desk (niche scouts → portfolio manager → risk manager) and inspect ideas, allocations, approved orders, vetoes, and advisor notes. |
 | **Risk Review** | Assemble a `trade-risk` limit stack from the registry, paste orders as JSON, and evaluate approvals/vetoes with cumulative fill tracking. |
+| **Paper** | Monitor `trade-paper`: paper account/equity, open positions, pending strategy approvals with one-click approve, backtest-vs-paper fidelity. Paper only — can never trade live. |
 | **Market Data** | Fetch bars (synthetic demo or delayed equities) and render a candlestick chart plus OHLC stats. |
 
 - **Zero required dependencies** beyond Python's stdlib + tkinter (ships with
@@ -122,6 +123,8 @@ trade-dashboard-desktop/
 - `run_backtest_job(strategy, symbols, params, bars, initial_cash)` — backtest → metrics, equity curve, trades
 - `run_desk_job(symbols, bars_by_symbol, equity)` — agent desk → plain-data report
 - `describe_limits` / `evaluate_orders_job(orders, limits, equity)` — risk review
+- `paper_available` / `paper_status` / `paper_approvals` / `paper_approve` /
+  `paper_fidelity` — paper-trading monitor (needs `trade-paper` installed)
 
 `engine.USING_SHARED_ENGINE` is `True` when the implementation is reused from
 `trade-dashboard-web`, `False` when the bundled fallback is active (shown in

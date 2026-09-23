@@ -54,6 +54,11 @@ on every test run.
 - **Risk Review**: `describe_limits` → limit picker → `evaluate_orders_job`
   (`trade-agents` risk agent over `trade-risk` limits, cumulative fills) →
   approved/vetoed views.
+- **Paper**: `paper_status` / `paper_approvals` / `paper_fidelity`
+  (`trade-paper` engine, lazy import, background jobs) → account line,
+  positions/approvals/fidelity treeviews; `paper_approve` on selected row.
+  Paper-only: nothing in this tab can reach a live broker — `trade-paper`
+  refuses live Alpaca endpoints in code.
 - **Market Data**: `get_bars` → `candle_layout` math → canvas.
 
 Bars cross every boundary as plain dicts (`bar_to_dict`), so no engine types

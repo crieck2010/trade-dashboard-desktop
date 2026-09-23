@@ -16,6 +16,11 @@ _SERVICE_NAMES = (
     "describe_strategy",
     "evaluate_orders_job",
     "list_strategies",
+    "paper_approvals",
+    "paper_approve",
+    "paper_available",
+    "paper_fidelity",
+    "paper_status",
     "run_backtest_job",
     "run_desk_job",
 )
@@ -34,6 +39,11 @@ except ImportError:  # Standalone install: use the local equivalents.
         describe_strategy,
         evaluate_orders_job,
         list_strategies,
+        paper_approvals,
+        paper_approve,
+        paper_available,
+        paper_fidelity,
+        paper_status,
         run_backtest_job,
         run_desk_job,
     )
