@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trade-dashboard-desktop"
+version = "0.1.0"
+description = "Dependency-free tkinter desktop dashboard for the trade-suite: backtest lab, strategy catalog, agent desk, risk review, market data"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "crieck2010" }]
+requires-python = ">=3.10"
+keywords = ["trading", "dashboard", "desktop", "backtesting", "tkinter"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial",
+]
+
+[project.scripts]
+trade-dashboard-desktop = "trade_dashboard_desktop.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/crieck2010/trade-dashboard-desktop"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

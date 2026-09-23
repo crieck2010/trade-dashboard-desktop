@@ -1,0 +1,43 @@
+"""Pure-logic services backing the desktop dashboard.  No tkinter imports.
+
+Interoperability: when the ``trade-dashboard-web`` package is installed,
+these names are bound to :mod:`trade_dashboard_web.engine` so both
+dashboards share one implementation.  Otherwise the stdlib-only local
+fallbacks in :mod:`trade_dashboard_desktop.engine.services` are used, which
+expose identical names and signatures.
+"""
+
+from __future__ import annotations
+
+_SERVICE_NAMES = (
+    "DataService",
+    "bar_to_dict",
+    "describe_limits",
+    "describe_strategy",
+    "evaluate_orders_job",
+    "list_strategies",
+    "run_backtest_job",
+    "run_desk_job",
+)
+
+try:  # Prefer the web dashboard's engine: one source of truth in a meta-install.
+    import trade_dashboard_web.engine as _web_engine
+
+    for _name in _SERVICE_NAMES:
+        globals()[_name] = getattr(_web_engine, _name)
+    USING_SHARED_ENGINE = True
+except ImportError:  # Standalone install: use the local equivalents.
+    from .services import (  # noqa: F401
+        DataService,
+        bar_to_dict,
+        describe_limits,
+        describe_strategy,
+        evaluate_orders_job,
+        list_strategies,
+        run_backtest_job,
+        run_desk_job,
+    )
+
+    USING_SHARED_ENGINE = False
+
+__all__ = list(_SERVICE_NAMES) + ["USING_SHARED_ENGINE"]
