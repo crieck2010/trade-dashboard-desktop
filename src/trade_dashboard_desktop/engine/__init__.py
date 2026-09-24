@@ -23,6 +23,13 @@ _SERVICE_NAMES = (
     "paper_status",
     "run_backtest_job",
     "run_desk_job",
+    "run_factor_analysis_job",
+    "run_montecarlo_job",
+    "run_optimize_job",
+    "run_orderbook_job",
+    "run_pairs_job",
+    "run_sentiment_price_job",
+    "run_vol_surface_job",
 )
 
 try:  # Prefer the web dashboard's engine: one source of truth in a meta-install.
@@ -46,6 +53,13 @@ except ImportError:  # Standalone install: use the local equivalents.
         paper_status,
         run_backtest_job,
         run_desk_job,
+        run_factor_analysis_job,
+        run_montecarlo_job,
+        run_optimize_job,
+        run_orderbook_job,
+        run_pairs_job,
+        run_sentiment_price_job,
+        run_vol_surface_job,
     )
 
     USING_SHARED_ENGINE = False

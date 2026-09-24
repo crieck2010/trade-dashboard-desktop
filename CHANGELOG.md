@@ -4,6 +4,35 @@ All notable changes to `trade-dashboard-desktop` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-09-24
+
+### Added
+- New **Research Lab** top-level tab (`ui/tabs/research_tab.py`) with an
+  inner notebook of seven sub-tabs, one per new quant engine: **Pairs**
+  (cointegration screening), **Order book** (LOB simulation), **Optimize**
+  (Markowitz + frontier), **Monte Carlo** (correlated-GBM VaR), **Vol
+  surface** (SVI fits), **Factors** (Fama-French regressions + GRS test),
+  **Sentiment** (sentiment-vs-price verdict). All work runs through the
+  existing background `Job`/`JobRunner` infrastructure; tkinter code only
+  renders the plain-data results.
+- Seven new engine services — `run_pairs_job`, `run_orderbook_job`,
+  `run_optimize_job`, `run_montecarlo_job`, `run_vol_surface_job`,
+  `run_factor_analysis_job`, `run_sentiment_price_job` — added to
+  `_SERVICE_NAMES` and mirrored one-for-one in the stdlib-only
+  `engine/services.py` fallback, with identical names and signatures to
+  `trade_dashboard_web.engine.research_service` (the single source of
+  truth in a meta-install). Each talks to its engine of record directly
+  via lazy import with a pip-install hint.
+- 9 new tests: service-name exposure, one fallback job test per engine,
+  and a missing-engine hint test.
+
+### Notes
+- The factors panel fetches up to 750 days of demo bars (the demo cap),
+  the minimum for the required 24 monthly return observations.
+- Research Lab demo caveats match the web dashboard: synthetic vol
+  quotes, synthetic factor dates, synthetic sentiment with a planted
+  1-day lead. Real data plugs in through the same engine adapters.
+
 ## [0.1.1] - 2026-09-23
 
 ### Added

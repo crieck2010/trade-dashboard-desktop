@@ -118,3 +118,97 @@ def test_evaluate_orders_job():
     assert "approved" in result and "vetoed" in result
     # $5,800 notional > 1% of $100k, so the tight limit must veto it.
     assert len(result["vetoed"]) == 1
+
+
+# -- research lab (fallback services) -----------------------------------------
+
+def _rbars(symbols=("SPY", "QQQ"), days=300):
+    from trade_dashboard_desktop.engine import services as svc
+    ds = svc.DataService()
+    return {s: ds.get_bars(s, source="demo", days=days) for s in symbols}
+
+
+def test_research_service_names_exposed():
+    for name in ("run_pairs_job", "run_orderbook_job", "run_optimize_job",
+                 "run_montecarlo_job", "run_vol_surface_job",
+                 "run_factor_analysis_job", "run_sentiment_price_job"):
+        assert name in engine._SERVICE_NAMES
+        assert callable(getattr(engine, name))
+
+
+def test_research_pairs_fallback():
+    pytest.importorskip("trade_pairs")
+    r = services.run_pairs_job(["SPY", "QQQ", "IWM"], _rbars(("SPY", "QQQ", "IWM")),
+                               lookback=100, max_pairs=3)
+    assert r["source"] == "trade-pairs"
+    assert all("hedge_ratio" in p for p in r["pairs"])
+
+
+def test_research_orderbook_fallback():
+    pytest.importorskip("trade_orderbook")
+    r = services.run_orderbook_job(side="sell", quantity=50.0)
+    assert r["source"] == "trade-orderbook"
+    assert 0.0 <= r["fill_ratio"] <= 1.0
+
+
+def test_research_optimize_fallback():
+    pytest.importorskip("trade_optimize")
+    r = services.run_optimize_job(["SPY", "QQQ"], _rbars(days=250),
+                                  method="equal_weight")
+    assert r["source"] == "trade-optimize"
+    assert abs(sum(r["weights"].values()) - 1.0) < 1e-9
+
+
+def test_research_montecarlo_fallback():
+    pytest.importorskip("trade_montecarlo")
+    r = services.run_montecarlo_job(["SPY", "QQQ"], _rbars(days=250),
+                                    n_paths=200, n_steps=60, seed=7)
+    assert r["source"] == "trade-montecarlo"
+    assert r["var"] >= 0
+
+
+def test_research_volsurface_fallback():
+    pytest.importorskip("trade_volsurface")
+    r = services.run_vol_surface_job()
+    assert r["source"] == "trade-volsurface"
+    assert r["n_quotes"] > 0
+
+
+def test_research_factors_fallback():
+    pytest.importorskip("trade_factors")
+    r = services.run_factor_analysis_job(["SPY", "QQQ"],
+                                         _rbars(("SPY", "QQQ"), days=750),
+                                         model="ff3", n_months=24)
+    assert r["source"] == "trade-factors"
+    assert r["grs"]["pvalue"] is not None
+
+
+def test_research_sentiment_fallback():
+    pytest.importorskip("trade_sentiment_vs_price")
+    r = services.run_sentiment_price_job("SPY", days=180)
+    assert r["source"] == "trade-sentiment-vs-price"
+    assert r["lead_lag"]["best_lag"] == 1
+
+
+def test_research_missing_engine_hint():
+    import sys
+    blocked = "trade_pairs"
+    real_import = __import__
+
+    def fake_import(name, *a, **k):
+        if name == blocked or name.startswith(blocked + "."):
+            raise ImportError(f"No module named {name!r}")
+        return real_import(name, *a, **k)
+
+    import builtins
+    old = builtins.__import__
+    builtins.__import__ = fake_import
+    try:
+        for mod in list(sys.modules):
+            if mod == blocked or mod.startswith(blocked + "."):
+                del sys.modules[mod]
+        with pytest.raises(RuntimeError, match="trade-pairs"):
+            services.run_pairs_job(["SPY", "QQQ"], _rbars(days=100),
+                                   lookback=100)
+    finally:
+        builtins.__import__ = old
