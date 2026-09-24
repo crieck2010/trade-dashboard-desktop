@@ -131,7 +131,8 @@ def _rbars(symbols=("SPY", "QQQ"), days=300):
 def test_research_service_names_exposed():
     for name in ("run_pairs_job", "run_orderbook_job", "run_optimize_job",
                  "run_montecarlo_job", "run_vol_surface_job",
-                 "run_factor_analysis_job", "run_sentiment_price_job"):
+                 "run_factor_analysis_job", "run_sentiment_price_job",
+                 "run_correlation_job"):
         assert name in engine._SERVICE_NAMES
         assert callable(getattr(engine, name))
 
@@ -188,6 +189,19 @@ def test_research_sentiment_fallback():
     r = services.run_sentiment_price_job("SPY", days=180)
     assert r["source"] == "trade-sentiment-vs-price"
     assert r["lead_lag"]["best_lag"] == 1
+
+
+def test_research_correlation_fallback():
+    pytest.importorskip("trade_eda")
+    bars = _rbars(("SPY", "QQQ", "IWM"), days=300)
+    r = services.run_correlation_job(["SPY", "QQQ", "IWM"], bars,
+                                     method="spearman", lookback=200)
+    assert r["source"] == "trade-eda"
+    assert r["correlation"]["method"] == "spearman"
+    assert r["n_obs"] == 199
+    assert len(r["correlation"]["matrix"]) == 3
+    with pytest.raises(ValueError):
+        services.run_correlation_job(["SPY"], bars)
 
 
 def test_research_missing_engine_hint():

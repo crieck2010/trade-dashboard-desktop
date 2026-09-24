@@ -1,4 +1,4 @@
-"""Research Lab tab: seven quant-engine panels in one inner notebook.
+"""Research Lab tab: eight quant-engine panels in one inner notebook.
 
 Each panel runs its job through the existing background-job infrastructure
 (`ctx.submit(Job(...))`); the engine services (shared web implementation
@@ -404,6 +404,87 @@ def _sentiment_panel(parent: tk.Widget, ctx: AppContext) -> None:
     run_btn.config(command=run)
 
 
+def _correlation_panel(parent: tk.Widget, ctx: AppContext) -> None:
+    eng = ctx.engine
+    row = _controls(parent)
+    sym_var = H.entry_row(row, "Symbols:", "SPY, QQQ, IWM, DIA", width=26)
+    method_var = tk.StringVar(value="pearson")
+    _combo(row, "Method", method_var, ["pearson", "spearman"], width=10)
+    shrink_var = tk.StringVar(value="ledoit_wolf")
+    _combo(row, "Shrinkage", shrink_var, ["ledoit_wolf", "sample"], width=12)
+    lb_var = H.entry_row(row, "Lookback:", "252", width=8)
+    run_btn = ttk.Button(row, text="Analyze")
+    run_btn.pack(side="left", padx=8)
+    summary_var = _run_block(
+        parent, "", "",
+        "Correlation matrix, shrunk covariance, per-asset stats, data quality.")
+    text = H.scroll_text(parent, height=16)
+
+    def on_done(r: dict) -> None:
+        div = r["diversification"]
+        hi = div["max_pairwise_corr"]
+        summary_var.set(
+            f"{len(r['symbols'])} symbols, {r['n_obs']} obs "
+            f"({r['correlation']['method']}): mean r={div['mean_pairwise_corr']:+.3f}, "
+            f"max {hi['a']}/{hi['b']}={hi['value']:+.3f}, "
+            f"effective N={div['effective_n_equal_weight']:.1f}, "
+            f"LW delta={r['covariance']['shrinkage_delta']:.3f}")
+        syms = r["symbols"]
+        mat = r["correlation"]["matrix"]
+        lines = ["Correlation matrix:"]
+        lines.append("        " + " ".join(f"{s:>8s}" for s in syms))
+        for s, rowv in zip(syms, mat):
+            lines.append(f"{s:>8s} " + " ".join(f"{v:>8.2f}" for v in rowv))
+        lines.append("")
+        lines.append("Per-asset stats (ann. vol, skew, ex. kurt, JB):")
+        for s, d in r["describe"].items():
+            lines.append(
+                f"  {s:>6s} vol={d['vol_annualized']:.1%} skew={d['skew']:+.2f} "
+                f"kurt={d['kurtosis_excess']:+.2f} JB={d['jarque_bera']:.1f}")
+        lines.append("")
+        dirty = {s: q for s, q in r["quality"].items() if not q["clean"]}
+        if dirty:
+            lines.append("Data-quality flags:")
+            for s, q in dirty.items():
+                flags = ", ".join(
+                    f"{k}={v}" for k, v in q.items()
+                    if k not in ("n_bars", "first", "last", "clean") and v)
+                lines.append(f"  {s}: {flags}")
+        else:
+            lines.append("Data quality: all clean")
+        text.delete("1.0", "end")
+        text.insert("1.0", "\n".join(lines))
+        ctx.status("Correlation analysis done")
+        run_btn.config(state="normal")
+
+    def on_error(error: str) -> None:
+        summary_var.set(f"Analysis failed: {error.splitlines()[0]}")
+        run_btn.config(state="normal")
+
+    def run() -> None:
+        try:
+            symbols = H.parse_symbols(sym_var.get())
+            if len(symbols) < 2:
+                raise ValueError("enter at least two symbols")
+            lookback = int(lb_var.get())
+        except ValueError as exc:
+            summary_var.set(f"Bad input: {exc}")
+            return
+        run_btn.config(state="disabled")
+        summary_var.set("Analyzing…")
+
+        def target():
+            bars = {s: ctx.data.get_bars(s, days=365) for s in symbols}
+            return eng.run_correlation_job(
+                symbols, bars, method=method_var.get(),
+                shrinkage=shrink_var.get(), lookback=lookback)
+
+        ctx.submit(Job("research-correlation", target, on_done=on_done,
+                       on_error=on_error))
+
+    run_btn.config(command=run)
+
+
 def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=8)
     inner = ttk.Notebook(frame)
@@ -415,4 +496,5 @@ def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
     _volsurface_panel(_tab(inner, "Vol surface"), ctx)
     _factors_panel(_tab(inner, "Factors"), ctx)
     _sentiment_panel(_tab(inner, "Sentiment"), ctx)
+    _correlation_panel(_tab(inner, "Correlations"), ctx)
     return frame

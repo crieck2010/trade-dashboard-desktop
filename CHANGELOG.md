@@ -4,6 +4,18 @@ All notable changes to `trade-dashboard-desktop` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-24
+
+### Added
+- Eighth **Research Lab** sub-tab: **Correlations** (trade-eda) — symbol
+  inputs, Pearson/Spearman method and Ledoit-Wolf/sample shrinkage
+  selectors, lookback; renders diversification stats, the correlation
+  matrix, per-asset summary stats, and data-quality flags.
+- `run_correlation_job` fallback in `engine/services.py` (stdlib-only,
+  lazy `trade-eda` import) plus `run_correlation_job` in `_SERVICE_NAMES`;
+  the signature-parity test covers it, so the bound web implementation
+  and the fallback stay signature-identical.
+
 ## [0.2.0] - 2026-09-24
 
 ### Added

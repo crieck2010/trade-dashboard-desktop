@@ -89,14 +89,15 @@ manual `datas` entries are needed. `build_exe.bat` is the one-command Windows
 flow; `installer.iss` produces the Inno Setup installer. Native builds must
 run on Windows — PyInstaller targets its host OS.
 
-## Research Lab (0.2.0)
+## Research Lab (0.2.0, extended 0.3.0)
 
 One top-level **Research Lab** tab (`ui/tabs/research_tab.py`) holds an
-inner `ttk.Notebook` with seven sub-tabs — Pairs, Order book, Optimize,
-Monte Carlo, Vol surface, Factors, Sentiment — one per new quant engine.
-The seven service names (`run_pairs_job`, `run_orderbook_job`,
+inner `ttk.Notebook` with eight sub-tabs — Pairs, Order book, Optimize,
+Monte Carlo, Vol surface, Factors, Sentiment, Correlations — one per quant
+engine. The eight service names (`run_pairs_job`, `run_orderbook_job`,
 `run_optimize_job`, `run_montecarlo_job`, `run_vol_surface_job`,
-`run_factor_analysis_job`, `run_sentiment_price_job`) were added to
+`run_factor_analysis_job`, `run_sentiment_price_job`,
+`run_correlation_job`) were added to
 `_SERVICE_NAMES` and mirrored one-for-one in the stdlib-only fallback
 `engine/services.py`, with identical names and signatures to
 `trade_dashboard_web.engine.research_service` (the single source of truth

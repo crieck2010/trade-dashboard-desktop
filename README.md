@@ -26,7 +26,7 @@ Part of the trade-suite: one pure-Python repo per module
 | **Risk Review** | Assemble a `trade-risk` limit stack from the registry, paste orders as JSON, and evaluate approvals/vetoes with cumulative fill tracking. |
 | **Paper** | Monitor `trade-paper`: paper account/equity, open positions, pending strategy approvals with one-click approve, backtest-vs-paper fidelity. Paper only — can never trade live. |
 | **Market Data** | Fetch bars (synthetic demo or delayed equities) and render a candlestick chart plus OHLC stats. |
-| **Research Lab** | Seven quant-engine panels in sub-tabs: pairs screening, order-book simulation, portfolio optimization, Monte Carlo VaR, vol-surface fitting, factor analysis, sentiment-vs-price. All run in the background; panels render plain-data tables/metrics. |
+| **Research Lab** | Eight quant-engine panels in sub-tabs: pairs screening, order-book simulation, portfolio optimization, Monte Carlo VaR, vol-surface fitting, factor analysis, sentiment-vs-price, correlation/EDA. All run in the background; panels render plain-data tables/metrics. |
 
 - **Zero required dependencies** beyond Python's stdlib + tkinter (ships with
   standard CPython on Windows/macOS; on Linux install `python3-tk`).
@@ -128,7 +128,8 @@ trade-dashboard-desktop/
   `paper_fidelity` — paper-trading monitor (needs `trade-paper` installed)
 - `run_pairs_job` / `run_orderbook_job` / `run_optimize_job` /
   `run_montecarlo_job` / `run_vol_surface_job` / `run_factor_analysis_job` /
-  `run_sentiment_price_job` — Research Lab jobs, one per quant engine
+  `run_sentiment_price_job` / `run_correlation_job` — Research Lab jobs, one
+  per quant engine
   (needs the corresponding engine installed; demo-friendly defaults)
 
 `engine.USING_SHARED_ENGINE` is `True` when the implementation is reused from
