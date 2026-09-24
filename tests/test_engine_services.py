@@ -132,7 +132,8 @@ def test_research_service_names_exposed():
     for name in ("run_pairs_job", "run_orderbook_job", "run_optimize_job",
                  "run_montecarlo_job", "run_vol_surface_job",
                  "run_factor_analysis_job", "run_sentiment_price_job",
-                 "run_correlation_job"):
+                 "run_correlation_job", "run_breadth_job", "run_macro_job",
+                 "run_stream_demo_job", "run_reconcile_demo_job"):
         assert name in engine._SERVICE_NAMES
         assert callable(getattr(engine, name))
 
@@ -204,9 +205,143 @@ def test_research_correlation_fallback():
         services.run_correlation_job(["SPY"], bars)
 
 
-def test_research_missing_engine_hint():
+def test_research_breadth_fallback():
+    pytest.importorskip("trade_breadth")
+    r = services.run_breadth_job(preset="standard", seed=7, n_days=600)
+    assert r["source"] == "trade-breadth"
+    assert r["preset"] == "standard"
+    assert r["seed"] == 7 and r["n_days"] == 600
+    assert r["n_symbols"] == 60
+    snap = r["snapshot"]
+    assert snap["regime"] in ("BROADENING", "NARROWING", "NEUTRAL")
+    assert 0.0 <= snap["fragility"] <= 1.0
+    assert isinstance(snap["thrusts_recent"], list)
+    assert "indicators" in snap
+    import json
+
+    json.dumps(r)  # must be JSON-serializable
+    with pytest.raises(ValueError):
+        services.run_breadth_job(preset="nope")
+    with pytest.raises(ValueError):
+        services.run_breadth_job(n_days=0)
+
+
+def test_research_macro_fallback():
+    pytest.importorskip("trade_macro")
+    r = services.run_macro_job(preset="standard", seed=42, days=600)
+    assert r["source"] == "trade-macro"
+    assert r["preset"] == "standard"
+    assert r["seed"] == 42 and r["days"] == 600
+    assert r["snapshot"]["source"] == "synthetic"
+    snap = r["snapshot"]
+    assert snap["regime"] in ("EXPANSION", "CONTRACTION", "NEUTRAL")
+    assert isinstance(snap["z_score"], float)
+    assert "ratio_vs_200dma" in snap
+    assert isinstance(snap["transition_alert"], bool)
+    import json
+
+    json.dumps(r)  # must be JSON-serializable
+    with pytest.raises(ValueError):
+        services.run_macro_job(preset="nope")
+    with pytest.raises(ValueError):
+        services.run_macro_job(days=-1)
+
+
+def test_research_stream_demo_fallback():
+    pytest.importorskip("trade_stream")
+    r = services.run_stream_demo_job(symbols=("AAA", "BBB"), seed=7, n_ticks=50)
+    assert r["source"] == "trade-stream"
+    assert r["demo"] is True
+    assert r["symbols"] == ["AAA", "BBB"]
+    assert r["n_ticks"] == 50
+    assert set(r["latest"]) == {"AAA", "BBB"}
+    import json
+
+    json.dumps(r)  # explicitly guaranteed by the service
+    with pytest.raises(ValueError):
+        services.run_stream_demo_job(symbols=())
+    with pytest.raises(ValueError):
+        services.run_stream_demo_job(n_ticks=0)
+
+
+def test_research_reconcile_demo_fallback():
+    pytest.importorskip("trade_paper")
+    r = services.run_reconcile_demo_job()
+    assert r["source"] == "trade-paper"
+    assert r["demo"] is True
+    assert r["account_id"] == "AGENTIC-001"
+    assert r["paper_positions"] == {"AAPL": 10.0, "TSLA": 4.5, "NVDA": 2.0}
+    assert r["broker_positions"] == {"AAPL": 10.0, "TSLA": 5.0}
+    rec = r["reconcile"]
+    assert rec["clean"] is False  # deliberate drift
+    assert rec["matched"] == ["AAPL"]
+    assert rec["missing_from_broker"] == [{"symbol": "NVDA", "paper": 2.0}]
+    assert rec["quantity_mismatches"] == [
+        {"symbol": "TSLA", "paper": 4.5, "broker": 5.0, "diff": 0.5}]
+    import json
+
+    json.dumps(r)  # must be JSON-serializable
+
+
+def test_crosscheck_fallback_matches_web_engine():
+    """Fallback and bound (web) jobs agree exactly on identical inputs."""
+    web = pytest.importorskip("trade_dashboard_web.engine")
+    pytest.importorskip("trade_breadth")
+    pytest.importorskip("trade_macro")
+    assert engine.USING_SHARED_ENGINE is True
+    a = services.run_breadth_job(preset="standard", seed=7, n_days=600)
+    b = web.run_breadth_job(preset="standard", seed=7, n_days=600)
+    assert a == b
+    a = services.run_macro_job(preset="standard", seed=42, days=600)
+    b = web.run_macro_job(preset="standard", seed=42, days=600)
+    assert a == b
+
+
+def test_research_missing_breadth_engine_hint():
+    import sys
+    blocked = "trade_breadth"
+    real_import = __import__
+
+    def fake_import(name, *a, **k):
+        if name == blocked or name.startswith(blocked + "."):
+            raise ImportError(f"No module named {name!r}")
+        return real_import(name, *a, **k)
+
+    import builtins
+    old = builtins.__import__
+    builtins.__import__ = fake_import
+    try:
+        for mod in list(sys.modules):
+            if mod == blocked or mod.startswith(blocked + "."):
+                del sys.modules[mod]
+        with pytest.raises(RuntimeError, match="trade-breadth"):
+            services.run_breadth_job(seed=7, n_days=60)
+    finally:
+        builtins.__import__ = old
+
+
+def test_research_missing_pairs_engine_hint():
     import sys
     blocked = "trade_pairs"
+    real_import = __import__
+
+    def fake_import(name, *a, **k):
+        if name == blocked or name.startswith(blocked + "."):
+            raise ImportError(f"No module named {name!r}")
+        return real_import(name, *a, **k)
+
+    import builtins
+    old = builtins.__import__
+    builtins.__import__ = fake_import
+    try:
+        for mod in list(sys.modules):
+            if mod == blocked or mod.startswith(blocked + "."):
+                del sys.modules[mod]
+        with pytest.raises(RuntimeError, match="trade-pairs"):
+            services.run_pairs_job(["SPY", "QQQ"], _rbars(days=100),
+                                   lookback=100)
+    finally:
+        builtins.__import__ = old
     real_import = __import__
 
     def fake_import(name, *a, **k):

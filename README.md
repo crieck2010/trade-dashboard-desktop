@@ -24,9 +24,10 @@ Part of the trade-suite: one pure-Python repo per module
 | **Strategies** | Browse the `trade-strategies` registry: family, description, parameters, warmup bars. |
 | **Agent Desk** | Run the `trade-agents` research desk (niche scouts → portfolio manager → risk manager) and inspect ideas, allocations, approved orders, vetoes, and advisor notes. |
 | **Risk Review** | Assemble a `trade-risk` limit stack from the registry, paste orders as JSON, and evaluate approvals/vetoes with cumulative fill tracking. |
-| **Paper** | Monitor `trade-paper`: paper account/equity, open positions, pending strategy approvals with one-click approve, backtest-vs-paper fidelity. Paper only — can never trade live. |
+| **Paper** | Monitor `trade-paper`: paper account/equity, open positions, pending strategy approvals with one-click approve, backtest-vs-paper fidelity, plus a Broker reconcile (DEMO) panel comparing the paper ledger to the Robinhood MCP mock. Paper only — can never trade live. |
 | **Market Data** | Fetch bars (synthetic demo or delayed equities) and render a candlestick chart plus OHLC stats. |
-| **Research Lab** | Eight quant-engine panels in sub-tabs: pairs screening, order-book simulation, portfolio optimization, Monte Carlo VaR, vol-surface fitting, factor analysis, sentiment-vs-price, correlation/EDA. All run in the background; panels render plain-data tables/metrics. |
+| **Research Lab** | Ten quant-engine panels in sub-tabs: pairs screening, order-book simulation, portfolio optimization, Monte Carlo VaR, vol-surface fitting, factor analysis, sentiment-vs-price, correlation/EDA, market-breadth regime, copper/gold macro regime. All run in the background; panels render plain-data tables/metrics. |
+| **Live** | Polls a local `trade-stream` demo session (StreamSession source="demo"); background thread pumps ticks to a thread-safe LatestPriceCache, the UI refreshes latest prices via `after(2000ms)` on the tkinter main thread. DEMO STREAM — simulated feed. |
 
 - **Zero required dependencies** beyond Python's stdlib + tkinter (ships with
   standard CPython on Windows/macOS; on Linux install `python3-tk`).
@@ -44,6 +45,11 @@ Part of the trade-suite: one pure-Python repo per module
 - **Responsive UI**: backtests and desk runs execute in background daemon
   threads; results are marshalled to the tkinter main thread, so the window
   never freezes.
+- **Live tab threading**: the stream thread (`trade_stream.StreamSession`,
+  source="demo") is the only writer to a thread-safe `LatestPriceCache` on
+  the message bus; the tkinter main thread polls the cache with
+  `after(2000ms)` and updates widgets. Tkinter widgets are never touched
+  from the stream thread.
 - **Monetization-ready**: license-key check hook and GitHub-releases
   update-check hook are built in (Tools menu).
 - **Windows distribution**: one-command PyInstaller single-file `.exe` build
@@ -128,9 +134,13 @@ trade-dashboard-desktop/
   `paper_fidelity` — paper-trading monitor (needs `trade-paper` installed)
 - `run_pairs_job` / `run_orderbook_job` / `run_optimize_job` /
   `run_montecarlo_job` / `run_vol_surface_job` / `run_factor_analysis_job` /
-  `run_sentiment_price_job` / `run_correlation_job` — Research Lab jobs, one
-  per quant engine
+  `run_sentiment_price_job` / `run_correlation_job` / `run_breadth_job` /
+  `run_macro_job` — Research Lab jobs, one per quant engine
   (needs the corresponding engine installed; demo-friendly defaults)
+- `run_stream_demo_job` — end-to-end trade-stream demo (feed -> bus -> cache),
+  JSON-serializable summary
+- `run_reconcile_demo_job` — paper-ledger vs Robinhood-MCP-mock reconcile
+  demo (read-only, deliberate drift; needs `trade-paper`)
 
 `engine.USING_SHARED_ENGINE` is `True` when the implementation is reused from
 `trade-dashboard-web`, `False` when the bundled fallback is active (shown in
@@ -206,7 +216,7 @@ See [CHANGELOG.md](CHANGELOG.md). MIT — see [LICENSE](LICENSE).
 
 ## The maths
 
-**What you learn.** Like its web sibling, this dashboard is a thin view over a pure-Python engine: the Backtest Lab reports backtest metrics, the Research Lab renders eight quant-engine results, and the Market Data tab draws candlesticks — all from plain-data computations in `engine/` (or the shared web engine) plus pure chart-scaling math in `ui/charts.py`.
+**What you learn.** Like its web sibling, this dashboard is a thin view over a pure-Python engine: the Backtest Lab reports backtest metrics, the Research Lab renders ten quant-engine results, and the Market Data tab draws candlesticks — all from plain-data computations in `engine/` (or the shared web engine) plus pure chart-scaling math in `ui/charts.py`.
 
 **Why it matters.** The engine/UI split is a correctness guarantee: `engine/services.py` carries the same function signatures as the web dashboard's `engine/research_service.py` (a parity test enforces this), and `engine.USING_SHARED_ENGINE` tells you which implementation is live. A backtest or research run gives identical numbers on desktop and web, and identical numbers to the `trade-suite` CLI, because there is one computation per job regardless of the UI in front of it. Heavy jobs run on background threads via `JobRunner`, but the maths is unchanged — threading only moves *where* it runs.
 

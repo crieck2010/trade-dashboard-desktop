@@ -1,4 +1,4 @@
-"""Research Lab tab: eight quant-engine panels in one inner notebook.
+"""Research Lab tab: ten quant-engine panels in one inner notebook.
 
 Each panel runs its job through the existing background-job infrastructure
 (`ctx.submit(Job(...))`); the engine services (shared web implementation
@@ -485,6 +485,142 @@ def _correlation_panel(parent: tk.Widget, ctx: AppContext) -> None:
     run_btn.config(command=run)
 
 
+def _breadth_panel(parent: tk.Widget, ctx: AppContext) -> None:
+    eng = ctx.engine
+    row = _controls(parent)
+    preset_var = tk.StringVar(value="standard")
+    _combo(row, "Preset", preset_var, ["standard", "strict", "loose"], 10)
+    days_var = H.entry_row(row, "Days (DEMO):", "600", width=8)
+    run_btn = ttk.Button(row, text="Run breadth (DEMO)")
+    run_btn.pack(side="left", padx=8)
+    summary_var = _run_block(
+        parent, "", "",
+        "Market-breadth regime snapshot, seeded demo universe (60 symbols).")
+    frag_row = ttk.Frame(parent)
+    frag_row.pack(fill="x", pady=(0, 6))
+    ttk.Label(frag_row, text="Fragility:").pack(side="left")
+    frag_bar = ttk.Progressbar(frag_row, length=240, maximum=1.0,
+                               mode="determinate")
+    frag_bar.pack(side="left", padx=6)
+    frag_var = tk.StringVar(value="n/a")
+    ttk.Label(frag_row, textvariable=frag_var).pack(side="left")
+    tree = H.make_tree(parent, [("Metric", 220), ("Value", 220)])
+
+    def on_done(r: dict) -> None:
+        s = r["snapshot"]
+        regime = s["regime"]
+        summary_var.set(
+            f"Regime {regime} (score {s['regime_score']:+.2f}, {s['date']}, "
+            f"{r['n_symbols']} symbols, preset {r['preset']})")
+        frag_bar.config(value=s["fragility"])
+        frag_var.set(f"{s['fragility']:.2%}")
+        ind = s["indicators"]
+        rows = [
+            ("Advancers / decliners",
+             f"{ind['advancers']} / {ind['decliners']}"),
+            ("A/D ratio", _fmt(ind["ad_ratio"])),
+            ("A/D line", _fmt(ind["ad_line"])),
+            ("% above 50dma", _fmt(ind["pct_above_50dma"])),
+            ("McClellan oscillator", _fmt(ind["mcclellan_oscillator"])),
+            ("McClellan summation", _fmt(ind["mcclellan_summation"])),
+            ("EW/CW index ratio", _fmt(ind["ew_cw_ratio"])),
+            ("Up/down volume ratio", _fmt(ind["up_down_volume_ratio"])),
+        ]
+        for t in s.get("thrusts_recent", []):
+            rows.append((f"Thrust {t['date']} ({t['type']})",
+                         f"magnitude {t['magnitude']:+.1f}, "
+                         f"{t['pct_above_50dma']:.1f}% above 50dma"))
+        if not s.get("thrusts_recent"):
+            rows.append(("Thrusts (window)", "none fired"))
+        for w in s.get("warnings", []):
+            rows.append(("Warning", w))
+        H.set_tree_rows(tree, [(k, _fmt(v)) for k, v in rows])
+        ctx.status(f"Breadth snapshot done: {regime}")
+        run_btn.config(state="normal")
+
+    def on_error(error: str) -> None:
+        summary_var.set(f"Breadth failed: {error.splitlines()[0]}")
+        run_btn.config(state="normal")
+
+    def run() -> None:
+        try:
+            days = int(days_var.get())
+            if days <= 0:
+                raise ValueError("days must be positive")
+        except ValueError as exc:
+            summary_var.set(f"Bad input: {exc}")
+            return
+        run_btn.config(state="disabled")
+        summary_var.set("Computing breadth snapshot…")
+
+        def target():
+            return eng.run_breadth_job(preset=preset_var.get(), seed=7,
+                                       n_days=days)
+
+        ctx.submit(Job("research-breadth", target, on_done=on_done,
+                       on_error=on_error))
+
+    run_btn.config(command=run)
+
+
+def _macro_panel(parent: tk.Widget, ctx: AppContext) -> None:
+    eng = ctx.engine
+    row = _controls(parent)
+    preset_var = tk.StringVar(value="standard")
+    _combo(row, "Preset", preset_var, ["sensitive", "standard", "calm"], 10)
+    days_var = H.entry_row(row, "Days (DEMO):", "600", width=8)
+    run_btn = ttk.Button(row, text="Run macro (DEMO)")
+    run_btn.pack(side="left", padx=8)
+    summary_var = _run_block(
+        parent, "", "",
+        "Copper/gold macro regime snapshot, seeded demo series.")
+    tree = H.make_tree(parent, [("Metric", 220), ("Value", 220)])
+
+    def on_done(r: dict) -> None:
+        s = r["snapshot"]
+        regime = s["regime"]
+        alert = s["transition_alert"]
+        summary_var.set(
+            f"Regime {regime} · z-score {s['z_score']:+.2f} "
+            f"({'TRANSITION ALERT' if alert else 'no transition'}, {s['date']})")
+        rows = [
+            ("Indicator", s["indicator"]),
+            ("Copper/gold ratio", _fmt(s["ratio"])),
+            ("Ratio vs 200DMA", _fmt(s["ratio_vs_200dma"])),
+            ("21d ROC", _fmt(s["roc_21d"])),
+            ("Z-score", _fmt(s["z_score"])),
+            ("Transition alert", "YES" if alert else "no"),
+            ("Transition", s["transition"] or "none"),
+        ]
+        H.set_tree_rows(tree, [(k, _fmt(v)) for k, v in rows])
+        ctx.status(f"Macro snapshot done: {regime}")
+        run_btn.config(state="normal")
+
+    def on_error(error: str) -> None:
+        summary_var.set(f"Macro failed: {error.splitlines()[0]}")
+        run_btn.config(state="normal")
+
+    def run() -> None:
+        try:
+            days = int(days_var.get())
+            if days <= 0:
+                raise ValueError("days must be positive")
+        except ValueError as exc:
+            summary_var.set(f"Bad input: {exc}")
+            return
+        run_btn.config(state="disabled")
+        summary_var.set("Computing macro snapshot…")
+
+        def target():
+            return eng.run_macro_job(preset=preset_var.get(), seed=42,
+                                     days=days)
+
+        ctx.submit(Job("research-macro", target, on_done=on_done,
+                       on_error=on_error))
+
+    run_btn.config(command=run)
+
+
 def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=8)
     inner = ttk.Notebook(frame)
@@ -497,4 +633,6 @@ def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
     _factors_panel(_tab(inner, "Factors"), ctx)
     _sentiment_panel(_tab(inner, "Sentiment"), ctx)
     _correlation_panel(_tab(inner, "Correlations"), ctx)
+    _breadth_panel(_tab(inner, "Breadth"), ctx)
+    _macro_panel(_tab(inner, "Macro"), ctx)
     return frame

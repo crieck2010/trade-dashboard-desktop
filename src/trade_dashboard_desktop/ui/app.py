@@ -8,7 +8,7 @@ from tkinter import messagebox, simpledialog, ttk
 from .. import engine
 from ..engine import licensing, updates
 from .context import AppContext
-from .tabs import backtest_tab, data_tab, desk_tab, paper_tab, research_tab, risk_tab, strategies_tab
+from .tabs import backtest_tab, data_tab, desk_tab, live_tab, paper_tab, research_tab, risk_tab, strategies_tab
 from .workers import Job, JobRunner
 
 APP_TITLE = "TradeSuite Desktop"
@@ -48,6 +48,7 @@ class TradeDeskApp(tk.Tk):
             ("Risk Review", risk_tab),
             ("Paper", paper_tab),
             ("Market Data", data_tab),
+            ("Live", live_tab),
             ("Research Lab", research_tab),
         ]:
             tab = module.build(notebook, self.ctx)

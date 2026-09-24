@@ -10,15 +10,17 @@ from trade_dashboard_desktop.ui.tabs import (
     backtest_tab,
     data_tab,
     desk_tab,
+    live_tab,
     paper_tab,
+    research_tab,
     risk_tab,
     strategies_tab,
 )
 
 
 def test_all_tabs_expose_build():
-    for module in (backtest_tab, data_tab, desk_tab, paper_tab, risk_tab,
-                   strategies_tab):
+    for module in (backtest_tab, data_tab, desk_tab, live_tab, paper_tab,
+                   research_tab, risk_tab, strategies_tab):
         assert callable(getattr(module, "build", None)), module.__name__
 
 
@@ -63,10 +65,47 @@ def test_app_builds_all_tabs_when_displayed():
         notebooks = [w for w in application.winfo_children()
                      if isinstance(w, ttk.Notebook)]
         assert len(notebooks) == 1
-        assert len(notebooks[0].tabs()) == 5
+        assert len(notebooks[0].tabs()) == 8  # incl. Live
         application.destroy()
     finally:
         try:
             root.destroy()
         except Exception:
             pass
+
+
+def test_live_tab_threading_contract_headless():
+    """Stream thread -> LatestPriceCache -> reader, no tkinter required."""
+    pytest.importorskip("trade_stream")
+    import threading
+    import time
+
+    import trade_stream as ts
+
+    from trade_dashboard_desktop.ui.tabs import live_tab
+
+    bus = ts.MessageBus()
+    cache = ts.LatestPriceCache(bus)
+    stop = threading.Event()
+    stats, lock = {"restarts": 0, "ticks": 0}, threading.Lock()
+    thread = threading.Thread(
+        target=live_tab._pump,
+        args=(stop, ts, bus, live_tab.DEMO_SYMBOLS, stats, lock),
+        daemon=True)
+    thread.start()
+    deadline = time.time() + 10.0
+    seen = set()
+    while time.time() < deadline:
+        seen |= set(cache.symbols)
+        if seen == set(live_tab.DEMO_SYMBOLS) and stats["restarts"] >= 1:
+            break
+        time.sleep(0.05)
+    stop.set()
+    thread.join(timeout=5.0)
+    bus.close()
+    assert set(cache.symbols) == set(live_tab.DEMO_SYMBOLS)
+    assert stats["ticks"] > 0
+    assert stats["restarts"] >= 1  # finite demo feed exhausted + restarted
+    for s in live_tab.DEMO_SYMBOLS:
+        price, ts_ = cache.get(s)
+        assert price > 0 and ts_ > 0

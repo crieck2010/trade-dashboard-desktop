@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trade-dashboard-desktop"
-version = "0.3.0"
+version = "0.4.0"
 description = "Dependency-free tkinter desktop dashboard for the trade-suite: backtest lab, strategy catalog, agent desk, risk review, market data"
 readme = "README.md"
 license = { text = "MIT" }

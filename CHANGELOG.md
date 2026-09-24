@@ -4,6 +4,42 @@ All notable changes to `trade-dashboard-desktop` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-09-24
+
+### Added
+- Two new **Research Lab** sub-tabs (now ten): **Breadth**
+  (`trade-breadth`) — regime badge, fragility progress bar, recent thrust
+  list, and the breadth indicator panel (A/D line, McClellan, EW/CW ratio)
+  over the seeded 60-symbol demo universe; and **Macro** (`trade-macro`) —
+  copper/gold regime badge, z-score, ratio vs 200DMA, and transition alert.
+  Both run via the existing `Job`/`JobRunner` background infra, inputs
+  labeled DEMO.
+- New **Live** top-level tab (`ui/tabs/live_tab.py`): polls a local
+  `trade-stream` demo session in a background thread (`StreamSession`
+  source="demo" → `MessageBus` → thread-safe `LatestPriceCache`); the
+  tkinter main thread refreshes the latest-price table via `after(2000ms)`.
+  The finite seeded feed restarts on exhaustion ("DEMO STREAM — simulated
+  feed"). The threading contract is documented in the module docstring
+  (stream thread → cache → `after()` UI updates; tkinter never touched from
+  the stream thread). Shows an install hint when `trade-stream` is absent.
+- **Paper** tab gains a "Broker reconcile (DEMO)" panel: runs
+  `run_reconcile_demo_job` through `JobRunner` and renders matched,
+  missing-from-broker/ledger, and quantity-mismatch rows. All existing
+  panels are preserved.
+- Four new engine services — `run_breadth_job`, `run_macro_job`,
+  `run_stream_demo_job`, `run_reconcile_demo_job` — added to
+  `_SERVICE_NAMES` and mirrored one-for-one in the stdlib-only
+  `engine/services.py` fallback, with identical names and signatures to the
+  web dashboard's canonical jobs. Each lazy-imports its engine with a
+  pip-install hint; demo inputs stay seeded and deterministic.
+
+### Notes
+- `trade-data-equities` v0.2.0 added a Polygon provider; this release needs
+  **no code change** — the new provider is data-layer only and flows through
+  the existing `trade-data-equities` adapter.
+- The Live tab and the reconcile demo are read-only simulations; nothing in
+  this release touches live trading or real broker accounts.
+
 ## [0.3.0] - 2026-09-24
 
 ### Added

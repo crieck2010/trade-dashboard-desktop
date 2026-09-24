@@ -61,6 +61,23 @@ def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
     ttk.Label(right, textvariable=fid_var, foreground="gray").pack(anchor="w")
     body.add(right, weight=1)
 
+    # -- reconcile (demo) -------------------------------------------------
+    rec_box = ttk.LabelFrame(frame, text="Broker reconcile (DEMO)", padding=6)
+    rec_box.pack(fill="x", pady=(6, 0))
+    rec_row = ttk.Frame(rec_box)
+    rec_row.pack(fill="x")
+    rec_btn = ttk.Button(rec_row, text="Run reconcile (DEMO)")
+    rec_btn.pack(side="left")
+    rec_var = tk.StringVar(
+        value="compares the paper ledger against the Robinhood MCP mock "
+              "(deliberate drift) — no real account access")
+    ttk.Label(rec_row, textvariable=rec_var, foreground="gray").pack(
+        side="left", padx=8)
+    rec_tree = H.make_tree(rec_box, [("symbol", 70), ("verdict", 130),
+                                     ("paper", 70), ("broker", 70),
+                                     ("diff", 70)])
+    rec_tree.pack(fill="x", pady=(4, 0))
+
     approval_ids: list[int] = []
 
     # -- jobs -------------------------------------------------------------
@@ -112,6 +129,40 @@ def build(parent: tk.Widget, ctx: AppContext) -> ttk.Frame:
         ctx.submit(Job("paper-refresh", target, on_done=on_done, on_error=on_error))
 
     refresh_btn.config(command=refresh)
+
+    def reconcile_demo() -> None:
+        rec_btn.config(state="disabled")
+        rec_var.set("Reconciling paper ledger vs broker mock…")
+
+        def target():
+            return eng.run_reconcile_demo_job()
+
+        def done(result: dict) -> None:
+            rec = result["reconcile"]
+            rows = [(s, "matched", result["paper_positions"][s],
+                     result["broker_positions"][s], "—")
+                    for s in rec["matched"]]
+            rows += [(d["symbol"], "missing from broker", d["paper"], "—",
+                      "—") for d in rec["missing_from_broker"]]
+            rows += [(d["symbol"], "missing from ledger", "—", d["broker"],
+                      "—") for d in rec["missing_from_ledger"]]
+            rows += [(d["symbol"], "qty mismatch", d["paper"], d["broker"],
+                      f"{d['diff']:+g}")
+                     for d in rec["quantity_mismatches"]]
+            H.set_tree_rows(rec_tree, rows)
+            rec_var.set("clean ✓" if rec["clean"]
+                        else "drift detected (deliberate, demo mock)")
+            ctx.status("Broker reconcile (demo) done")
+            rec_btn.config(state="normal")
+
+        def err(exc: Exception) -> None:
+            rec_var.set(f"Reconcile failed: {exc}")
+            rec_btn.config(state="normal")
+
+        ctx.submit(Job("paper-reconcile-demo", target, on_done=done,
+                       on_error=err))
+
+    rec_btn.config(command=reconcile_demo)
 
     def approve_selected() -> None:
         sel = appr_tree.selection()
