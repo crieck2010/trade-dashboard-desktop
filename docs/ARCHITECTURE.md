@@ -89,6 +89,26 @@ manual `datas` entries are needed. `build_exe.bat` is the one-command Windows
 flow; `installer.iss` produces the Inno Setup installer. Native builds must
 run on Windows — PyInstaller targets its host OS.
 
+## Research Lab (0.2.0)
+
+One top-level **Research Lab** tab (`ui/tabs/research_tab.py`) holds an
+inner `ttk.Notebook` with seven sub-tabs — Pairs, Order book, Optimize,
+Monte Carlo, Vol surface, Factors, Sentiment — one per new quant engine.
+The seven service names (`run_pairs_job`, `run_orderbook_job`,
+`run_optimize_job`, `run_montecarlo_job`, `run_vol_surface_job`,
+`run_factor_analysis_job`, `run_sentiment_price_job`) were added to
+`_SERVICE_NAMES` and mirrored one-for-one in the stdlib-only fallback
+`engine/services.py`, with identical names and signatures to
+`trade_dashboard_web.engine.research_service` (the single source of truth
+in a meta-install). Each fallback job imports its engine of record
+directly with a `pip install` hint when absent.
+
+Panels keep the tab contract: controls collect plain inputs, the engine
+does all the work in a background `Job`, and the panel renders the
+plain-data result (trees, metric rows, or a verdict text block). The
+factors panel fetches up to 750 days of demo bars (the demo cap) to reach
+the 24-month floor for Fama-French regressions.
+
 ## Future scaling seams
 
 - `Job.target` is a plain callable: pointing it at a process pool or a task
