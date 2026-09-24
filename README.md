@@ -203,3 +203,13 @@ machines and in the packaged Windows app smoke test).
 ## Changelog / License
 
 See [CHANGELOG.md](CHANGELOG.md). MIT — see [LICENSE](LICENSE).
+
+## The maths
+
+**What you learn.** Like its web sibling, this dashboard is a thin view over a pure-Python engine: the Backtest Lab reports backtest metrics, the Research Lab renders eight quant-engine results, and the Market Data tab draws candlesticks — all from plain-data computations in `engine/` (or the shared web engine) plus pure chart-scaling math in `ui/charts.py`.
+
+**Why it matters.** The engine/UI split is a correctness guarantee: `engine/services.py` carries the same function signatures as the web dashboard's `engine/research_service.py` (a parity test enforces this), and `engine.USING_SHARED_ENGINE` tells you which implementation is live. A backtest or research run gives identical numbers on desktop and web, and identical numbers to the `trade-suite` CLI, because there is one computation per job regardless of the UI in front of it. Heavy jobs run on background threads via `JobRunner`, but the maths is unchanged — threading only moves *where* it runs.
+
+**The maths.** Backtests delegate to `trade-backtest` (return, Sharpe, max drawdown, win rate, round-trip trades). The Optimize panel maximizes Sharpe `(wᵀμ)/√(wᵀΣw)` or minimizes variance `wᵀΣw` over sample moments of daily simple returns, subject to a max-weight cap. The Monte Carlo panel fits per-asset `μ`, `σ`, and the correlation matrix from sample moments, simulates correlated GBM paths, and reports VaR/CVaR at the chosen level. The Correlation panel offers sample or Ledoit-Wolf-shrunk covariance (`Σ* = δF + (1−δ)S`, shrinking the sample covariance toward a structured target for stability in small samples). The remaining panels (pairs ADF cointegration, order-book impact, vol-surface fitting, Fama-French regressions with GRS, sentiment lead-lag) delegate to their engines of record. Charting is pure affine scaling: `line_points` maps values to canvas coordinates via `x = pad + i·(W−2·pad)/(n−1)`, `y = H−pad − (v−lo)/span·(H−2·pad)`; `candle_layout` places each bar in its time slot with body `max(1, 0.6·slot)` wide and wicks spanning high–low — all testable without a display.
+
+**Honest limitations.** The dashboard adds no statistics of its own; it inherits the engines' assumptions (GBM VaR, Gaussian-ish Sharpe, sample-moment frontiers). Ledoit-Wolf shrinkage is a bias-variance tradeoff, not free accuracy. Demo data is synthetic; each Research Lab panel carries the same demo caveats as the web dashboard. The bundled fallback engine mirrors the web engine's signatures, not a second independent implementation — new web-engine parameters must be mirrored here by hand.
