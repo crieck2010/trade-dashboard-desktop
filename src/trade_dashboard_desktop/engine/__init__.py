@@ -21,6 +21,7 @@ _SERVICE_NAMES = (
     "paper_available",
     "paper_fidelity",
     "paper_status",
+    "run_agent_activity_job",
     "run_backtest_job",
     "run_breadth_job",
     "run_correlation_job",
@@ -28,13 +29,18 @@ _SERVICE_NAMES = (
     "run_factor_analysis_job",
     "run_macro_job",
     "run_montecarlo_job",
+    "run_network_job",
     "run_optimize_job",
     "run_orderbook_job",
     "run_pairs_job",
+    "run_performance_job",
     "run_reconcile_demo_job",
+    "run_risk_monitor_job",
     "run_sentiment_price_job",
     "run_stream_demo_job",
+    "run_trades_job",
     "run_vol_surface_job",
+    "trades_to_csv",
 )
 
 try:  # Prefer the web dashboard's engine: one source of truth in a meta-install.
@@ -56,6 +62,7 @@ except ImportError:  # Standalone install: use the local equivalents.
         paper_available,
         paper_fidelity,
         paper_status,
+        run_agent_activity_job,
         run_backtest_job,
         run_breadth_job,
         run_correlation_job,
@@ -63,13 +70,18 @@ except ImportError:  # Standalone install: use the local equivalents.
         run_factor_analysis_job,
         run_macro_job,
         run_montecarlo_job,
+        run_network_job,
         run_optimize_job,
         run_orderbook_job,
         run_pairs_job,
+        run_performance_job,
         run_reconcile_demo_job,
+        run_risk_monitor_job,
         run_sentiment_price_job,
         run_stream_demo_job,
+        run_trades_job,
         run_vol_surface_job,
+        trades_to_csv,
     )
 
     USING_SHARED_ENGINE = False

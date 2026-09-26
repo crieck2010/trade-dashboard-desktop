@@ -4,6 +4,64 @@ All notable changes to `trade-dashboard-desktop` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-09-26
+
+### Added
+- **Terminal-wave phase 2** — five new top-level tabs mirroring the
+  `trade-dashboard-web` v0.5.0 terminal wave, each running its canonical
+  job through the existing `Job`/`JobRunner` background infrastructure:
+  - **Trades** (`ui/tabs/trades_tab.py`) — filter form (date range,
+    symbol, side, strategy, agent, outcome), scrollable blotter table,
+    and an "Export CSV" button writing `engine.trades_to_csv` bytes via a
+    Save-As dialog. DEMO banner when the service reports `demo: True`.
+  - **Performance** (`ui/tabs/performance_tab.py`) — sub-tabs Summary
+    (win rate, profit factor, expectancy, max drawdown, CAGR), Equity &
+    Drawdown, Monthly heatmap, Rolling (63-day Sharpe/vol), and Histogram,
+    rendered with new pure-math helpers in `ui/charts.py`. Works on paper
+    equity or a backtest-result JSON.
+  - **Agents** (`ui/tabs/agents_tab.py`) — leaderboards (researcher /
+    risk desk / PM), Brier calibration chart, debate timeline, and the
+    pending-approval queue; Elo curves shown as one line chart per
+    *selected* agent (simplified parity — tkinter has no in-cell SVG).
+  - **Network** (`ui/tabs/network_tab.py`) — STATIC parity render of the
+    engine-computed correlation MST: nodes colored by cluster and sized
+    by annualized vol, edge width scaling with |correlation|. No
+    pan/zoom or hover tooltips on desktop; exploration is menu-driven
+    (cluster listbox + node selector → top correlations). The tab and
+    docs say so explicitly.
+  - **Risk Monitor** (`ui/tabs/risk_monitor_tab.py`) — exposure bars,
+    Herfindahl + largest-position readout, trailing-21-day realized-vol
+    timeline, kill-switch status pill (`halted`/`active`/`unknown`),
+    and the regime-conviction gauge with its hysteresis state.
+- Five new engine services — `run_trades_job`, `run_performance_job`,
+  `run_agent_activity_job`, `run_network_job`, `run_risk_monitor_job` —
+  plus `trades_to_csv`, all registered in `_SERVICE_NAMES` and mirrored
+  one-for-one in the stdlib-only `engine/services.py` fallback with the
+  exact canonical signatures (a parity test pins each signature string).
+  The fallbacks are verified byte-identical to the web canonicals on
+  every deterministic demo path (verified by a cross-check test, not just
+  by signature). Degraded behavior vs the shared engine is documented in
+  `engine/services.py`: none on the demo paths (the web terminal jobs
+  are stdlib-only there); on the real network path the fallback uses
+  this package's own `run_correlation_job` (needs `trade-eda`) for the
+  correlation matrix where the web job uses its research_service.
+- `ui/charts.py` gains terminal-wave math + renderers, all pure and
+  headless-testable: `underwater_curve`, `bar_layout` (signed bars +
+  zero line), `heatmap_layout`/`heatmap_color`, `gauge_layout`,
+  `network_positions`/`edge_width`/`cluster_color`, `calibration_layout`,
+  and thin canvas renderers `draw_underwater`, `draw_histogram`,
+  `draw_bars`, `draw_heatmap`, `draw_gauge`, `draw_network`,
+  `draw_calibration`.
+- New `docs/PARITY.md`: enumerates exactly which terminal views are full,
+  simplified, or static parity on desktop vs the web flagship, and why.
+
+### Notes
+- The web dashboard remains the flagship for the terminal wave; the
+  desktop is simplified parity per `docs/PARITY.md`. All numbers come
+  from the same canonical jobs — only presentation differs.
+- Demo data is never presented as real: every terminal tab shows a DEMO
+  banner whenever the service reports `demo: True`.
+
 ## [0.4.0] - 2026-09-24
 
 ### Added

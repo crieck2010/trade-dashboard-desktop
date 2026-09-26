@@ -7,20 +7,26 @@ import pytest
 from trade_dashboard_desktop.ui import charts  # noqa: F401  (import check)
 from trade_dashboard_desktop.ui import helpers
 from trade_dashboard_desktop.ui.tabs import (
+    agents_tab,
     backtest_tab,
     data_tab,
     desk_tab,
     live_tab,
+    network_tab,
     paper_tab,
+    performance_tab,
     research_tab,
+    risk_monitor_tab,
     risk_tab,
     strategies_tab,
+    trades_tab,
 )
 
 
 def test_all_tabs_expose_build():
-    for module in (backtest_tab, data_tab, desk_tab, live_tab, paper_tab,
-                   research_tab, risk_tab, strategies_tab):
+    for module in (agents_tab, backtest_tab, data_tab, desk_tab, live_tab,
+                   network_tab, paper_tab, performance_tab, research_tab,
+                   risk_monitor_tab, risk_tab, strategies_tab, trades_tab):
         assert callable(getattr(module, "build", None)), module.__name__
 
 
@@ -65,7 +71,7 @@ def test_app_builds_all_tabs_when_displayed():
         notebooks = [w for w in application.winfo_children()
                      if isinstance(w, ttk.Notebook)]
         assert len(notebooks) == 1
-        assert len(notebooks[0].tabs()) == 8  # incl. Live
+        assert len(notebooks[0].tabs()) == 13  # incl. Live + 5 terminal tabs
         application.destroy()
     finally:
         try:

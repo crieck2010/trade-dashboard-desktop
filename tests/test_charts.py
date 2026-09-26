@@ -89,3 +89,171 @@ def test_draw_candles_creates_rectangles():
     charts.draw_candles(canvas, bars, 400, 300)
     rects = [c for k, c in canvas.calls if k == "rect"]
     assert len(rects) == 10
+
+
+# -- terminal-wave math helpers ------------------------------------------------
+
+def test_underwater_curve():
+    dd = charts.underwater_curve([100.0, 110.0, 99.0, 121.0])
+    assert dd == [0.0, 0.0, -(110.0 - 99.0) / 110.0, 0.0]
+    assert charts.underwater_curve([]) == []
+    assert all(d <= 0 for d in charts.underwater_curve([3.0, 2.0, 1.0]))
+
+
+def test_bar_layout_signed_and_zero_line():
+    rects = charts.bar_layout([2.0, -1.0, 0.0], 300, 200)
+    assert len(rects) == 3
+    zy = charts.zero_line_y([2.0, -1.0, 0.0], 200)
+    # positive bar sits above the zero line, negative below it
+    assert rects[0][3] <= zy + 1e-9 and rects[0][1] <= rects[0][3]
+    assert rects[1][1] >= zy - 1e-9
+    assert charts.bar_layout([], 300, 200) == []
+
+
+def test_heatmap_layout_shape():
+    cells = charts.heatmap_layout(2, 12, 400, 200)
+    assert len(cells) == 24
+    assert cells[0]["row"] == 0 and cells[0]["col"] == 0
+    assert cells[13]["row"] == 1 and cells[13]["col"] == 1
+    assert cells[0]["x0"] < cells[0]["x1"] and cells[0]["y0"] < cells[0]["y1"]
+    assert charts.heatmap_layout(0, 12, 400, 200) == []
+
+
+def test_heatmap_color_diverging():
+    assert charts.heatmap_color(None, -0.1, 0.1) == "#e8e8e8"
+    pos = charts.heatmap_color(0.1, -0.1, 0.1)
+    neg = charts.heatmap_color(-0.1, -0.1, 0.1)
+    zero = charts.heatmap_color(0.0, -0.1, 0.1)
+    assert pos != neg and zero == "#ffffff"
+    assert pos.startswith("#") and len(pos) == 7
+
+
+def test_gauge_layout_bounds():
+    g = charts.gauge_layout(0.0, 400, 200)
+    assert g["frac"] == 0.0
+    nx, _ = g["needle"]
+    assert abs(nx - (g["cx"] - g["r"])) < 1e-6  # pointing left at 0%
+    g = charts.gauge_layout(1.5, 400, 200)  # clamped
+    assert g["frac"] == 1.0
+    g = charts.gauge_layout(0.5, 400, 200)
+    assert g["needle"][1] < g["cy"]  # pointing up at 50%
+
+
+def test_network_positions_scaling():
+    nodes = [{"symbol": "A", "x": -100.0, "y": 100.0, "vol": 0.4,
+              "cluster": 0},
+             {"symbol": "B", "x": 100.0, "y": -100.0, "vol": 0.1,
+              "cluster": 1}]
+    pts = charts.network_positions(nodes, 400, 300, pad=20)
+    assert len(pts) == 2
+    assert pts[0]["x"] < pts[1]["x"] and pts[0]["y"] > pts[1]["y"]
+    assert pts[0]["r"] > pts[1]["r"]  # higher vol -> larger node
+    assert 5.0 <= pts[1]["r"] <= 16.0
+    assert charts.network_positions([], 400, 300) == []
+    assert charts.cluster_color(0) == charts.cluster_color(8)  # cycles
+    assert charts.cluster_color(0) != charts.cluster_color(1)
+    assert charts.edge_width(0.0) < charts.edge_width(-0.9) <= 6.0
+
+
+def test_calibration_layout_skips_empty_bins():
+    brier = {"bins": [0.05, 0.15], "observed": [0.0, None], "n": [4, 0]}
+    lay = charts.calibration_layout(brier, 400, 300)
+    assert len(lay["diag"]) == 2
+    assert len(lay["points"]) == 1
+    assert lay["points"][0]["p"] == 0.05
+    assert lay["points"][0]["r"] >= 3.0
+
+
+def _fake_canvas():
+    class FakeCanvas:
+        def __init__(self):
+            self.calls = []
+
+        def delete(self, *args):
+            self.calls.append(("delete", args, {}))
+
+        def create_line(self, *args, **kwargs):
+            self.calls.append(("line", args, kwargs))
+
+        def create_rectangle(self, *args, **kwargs):
+            self.calls.append(("rect", args, kwargs))
+
+        def create_text(self, *args, **kwargs):
+            self.calls.append(("text", args, kwargs))
+
+        def create_oval(self, *args, **kwargs):
+            self.calls.append(("oval", args, kwargs))
+
+        def create_polygon(self, *args, **kwargs):
+            self.calls.append(("polygon", args, kwargs))
+
+        def create_arc(self, *args, **kwargs):
+            self.calls.append(("arc", args, kwargs))
+
+    return FakeCanvas()
+
+
+def test_draw_underwater_fill_and_line():
+    c = _fake_canvas()
+    charts.draw_underwater(c, [100.0, 90.0, 95.0, 80.0], 400, 300)
+    kinds = [k for k, _, _ in c.calls]
+    assert "line" in kinds and "polygon" in kinds
+    assert any("max drawdown" in kw.get("text", "")
+               for k, _, kw in c.calls if k == "text")
+
+
+def test_draw_histogram_and_bars():
+    c = _fake_canvas()
+    charts.draw_histogram(c, {"bins": [0, 1, 2], "counts": [3, 5]}, 400, 300)
+    assert len([1 for k, _, _ in c.calls if k == "rect"]) == 2
+    c = _fake_canvas()
+    charts.draw_bars(c, [("SPY", 10.0), ("QQQ", -5.0)], 400, 300)
+    assert len([1 for k, _, _ in c.calls if k == "rect"]) == 2
+    assert "line" in [k for k, _, _ in c.calls]  # zero line
+
+
+def test_draw_heatmap_cells():
+    c = _fake_canvas()
+    charts.draw_heatmap(c, [2025], [[0.01, None] + [0.0] * 10], 400, 200)
+    rects = [a for k, a, _ in c.calls if k == "rect"]
+    assert len(rects) == 12
+    c = _fake_canvas()
+    charts.draw_heatmap(c, [], [], 400, 200)
+    assert "text" in [k for k, _, _ in c.calls]
+
+
+def test_draw_gauge_and_calibration():
+    c = _fake_canvas()
+    charts.draw_gauge(c, 0.725, "conviction 72.5%", 400, 200)
+    kinds = [k for k, _, _ in c.calls]
+    assert "arc" in kinds and "line" in kinds and "oval" in kinds
+    c = _fake_canvas()
+    charts.draw_calibration(c, {"bins": [0.05], "observed": [0.1],
+                                "n": [10]}, 400, 300)
+    assert "line" in [k for k, _, _ in c.calls]  # diagonal
+    assert "oval" in [k for k, _, _ in c.calls]  # point
+    c = _fake_canvas()
+    charts.draw_calibration(c, {"bins": [], "observed": [], "n": []},
+                            400, 300)
+    assert "oval" not in [k for k, _, _ in c.calls]
+
+
+def test_draw_network_static():
+    c = _fake_canvas()
+    result = {
+        "nodes": [
+            {"symbol": "A", "x": -50.0, "y": 0.0, "vol": 0.2, "cluster": 0},
+            {"symbol": "B", "x": 50.0, "y": 0.0, "vol": 0.4, "cluster": 1},
+        ],
+        "edges": [{"a": 0, "b": 1, "weight": 0.8, "distance": 0.63}],
+        "clusters": [{"id": 0, "members": ["A"]},
+                     {"id": 1, "members": ["B"]}],
+        "params": {"seed": 7},
+    }
+    charts.draw_network(c, result, 400, 300)
+    kinds = [k for k, _, _ in c.calls]
+    assert "line" in kinds and kinds.count("oval") == 2
+    assert kinds.count("text") >= 2  # symbol labels
+    c = _fake_canvas()
+    charts.draw_network(c, {"nodes": []}, 400, 300)
+    assert "text" in [k for k, _, _ in c.calls]

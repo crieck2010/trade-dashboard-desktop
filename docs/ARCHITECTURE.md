@@ -32,7 +32,7 @@ meta-package).
 ## Engine reuse with trade-dashboard-web
 
 `engine/__init__.py` tries `import trade_dashboard_web.engine` first. When
-present, all eight service names are bound to the web package's
+present, all service names are bound to the web package's
 implementations, so both dashboards share one codebase and produce identical
 results. When absent, the stdlib-only `engine/services.py` fallback provides
 the same names and signatures. `engine.USING_SHARED_ENGINE` records which
@@ -59,6 +59,16 @@ on every test run.
   positions/approvals/fidelity treeviews; `paper_approve` on selected row.
   Paper-only: nothing in this tab can reach a live broker — `trade-paper`
   refuses live Alpaca endpoints in code.
+- **Trades**: `run_trades_job` → blotter rows → treeview; `trades_to_csv`
+  → Save-As dialog bytes.
+- **Performance**: `run_performance_job` → summary cards + canvas charts
+  (equity, underwater, heatmap, rolling, histogram).
+- **Agents**: `run_agent_activity_job` → leaderboard trees, Elo line per
+  selected agent, Brier calibration canvas, debate/queue trees.
+- **Network**: `run_network_job` → `draw_network` static canvas render +
+  cluster listbox + node combobox → top correlations.
+- **Risk Monitor**: `run_risk_monitor_job` → exposure bars, Herfindahl
+  readout, vol timeline, kill-switch pill, conviction gauge.
 - **Market Data**: `get_bars` → `candle_layout` math → canvas.
 
 Bars cross every boundary as plain dicts (`bar_to_dict`), so no engine types
@@ -109,6 +119,29 @@ does all the work in a background `Job`, and the panel renders the
 plain-data result (trees, metric rows, or a verdict text block). The
 factors panel fetches up to 750 days of demo bars (the demo cap) to reach
 the 24-month floor for Fama-French regressions.
+
+## Terminal wave (0.5.0)
+
+Five top-level tabs — Trades, Performance, Agents, Network, Risk Monitor —
+mirror the `trade-dashboard-web` v0.5.0 terminal wave one-for-one. The five
+canonical jobs (`run_trades_job`, `run_performance_job`,
+`run_agent_activity_job`, `run_network_job`, `run_risk_monitor_job`) plus
+`trades_to_csv` are registered in `_SERVICE_NAMES` and mirrored in the
+stdlib-only `engine/services.py` fallback with identical signatures; a
+cross-check test asserts byte-identical results on every deterministic
+demo path. The fallback docstring states the degraded behavior per job
+(none on the demo paths; on the real network path the correlation matrix
+comes from this package's own `run_correlation_job` — needs `trade-eda` —
+where the web job uses its research_service).
+
+`docs/PARITY.md` enumerates the desktop parity split exactly: full,
+simplified (Elo sparklines → per-agent line chart), or static (network —
+one canvas render of the engine-computed layout, menu-driven exploration).
+Charts live in `ui/charts.py` as pure-math helpers + thin renderers
+(`underwater_curve`, `bar_layout`, `heatmap_layout`/`heatmap_color`,
+`gauge_layout`, `network_positions`/`edge_width`/`cluster_color`,
+`calibration_layout` and the matching `draw_*` renderers). No engine math
+lives in the tab modules.
 
 ## Future scaling seams
 

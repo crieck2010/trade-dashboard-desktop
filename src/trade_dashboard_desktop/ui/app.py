@@ -8,7 +8,9 @@ from tkinter import messagebox, simpledialog, ttk
 from .. import engine
 from ..engine import licensing, updates
 from .context import AppContext
-from .tabs import backtest_tab, data_tab, desk_tab, live_tab, paper_tab, research_tab, risk_tab, strategies_tab
+from .tabs import (agents_tab, backtest_tab, data_tab, desk_tab, live_tab,
+                   network_tab, paper_tab, performance_tab, risk_monitor_tab,
+                   risk_tab, strategies_tab, trades_tab)
 from .workers import Job, JobRunner
 
 APP_TITLE = "TradeSuite Desktop"
@@ -46,7 +48,12 @@ class TradeDeskApp(tk.Tk):
             ("Strategies", strategies_tab),
             ("Agent Desk", desk_tab),
             ("Risk Review", risk_tab),
+            ("Risk Monitor", risk_monitor_tab),
             ("Paper", paper_tab),
+            ("Trades", trades_tab),
+            ("Performance", performance_tab),
+            ("Agents", agents_tab),
+            ("Network", network_tab),
             ("Market Data", data_tab),
             ("Live", live_tab),
             ("Research Lab", research_tab),
@@ -97,7 +104,8 @@ class TradeDeskApp(tk.Tk):
             f"{APP_TITLE} v{__version__}\n\n"
             "Desktop research dashboard for the trade-suite:\n"
             "backtesting, strategy catalog, agentic research desk,\n"
-            "risk review, and market data.\n\n"
+            "risk review, trade blotter, performance analytics,\n"
+            "agent activity, correlation network, and market data.\n\n"
             "Research and paper-trading tooling only — no live trading.",
         )
 

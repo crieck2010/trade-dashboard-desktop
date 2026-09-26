@@ -28,6 +28,11 @@ Part of the trade-suite: one pure-Python repo per module
 | **Market Data** | Fetch bars (synthetic demo or delayed equities) and render a candlestick chart plus OHLC stats. |
 | **Research Lab** | Ten quant-engine panels in sub-tabs: pairs screening, order-book simulation, portfolio optimization, Monte Carlo VaR, vol-surface fitting, factor analysis, sentiment-vs-price, correlation/EDA, market-breadth regime, copper/gold macro regime. All run in the background; panels render plain-data tables/metrics. |
 | **Live** | Polls a local `trade-stream` demo session (StreamSession source="demo"); background thread pumps ticks to a thread-safe LatestPriceCache, the UI refreshes latest prices via `after(2000ms)` on the tkinter main thread. DEMO STREAM — simulated feed. |
+| **Trades** | Filterable paper-ledger blotter (date range, symbol, side, strategy, agent, outcome) with CSV export via Save-As dialog; FIFO lot-matched realized P&L per order. DEMO banner when no ledger is found. |
+| **Performance** | Summary cards (win rate, profit factor, expectancy, max drawdown, CAGR), equity curve + underwater drawdown, monthly-return heatmap, rolling 63-day Sharpe/vol, return histogram — over paper equity or a backtest-result JSON. |
+| **Agents** | Track-record leaderboards (researcher / risk desk / PM), Elo-over-time curves (one line per selected agent), Brier calibration of risk-desk drawdown forecasts, debate timeline, pending-approval queue. |
+| **Network** | **Static parity** render of the correlation MST: nodes colored by cluster, sized by annualized vol, edge width by \|correlation\|; clusters as a listbox, node selector shows top correlations. No pan/zoom — see `docs/PARITY.md`. |
+| **Risk Monitor** | Exposure bars, Herfindahl + largest-position readout, trailing-21-day realized-vol timeline, kill-switch status pill, regime-conviction gauge with hysteresis state. |
 
 - **Zero required dependencies** beyond Python's stdlib + tkinter (ships with
   standard CPython on Windows/macOS; on Linux install `python3-tk`).
@@ -113,8 +118,8 @@ trade-dashboard-desktop/
 │       ├── context.py / helpers.py # shared tab context + widget helpers
 │       └── tabs/                   # backtest / strategies / desk /
 │                                   # risk / data — each exposes build()
-├── tests/                          # 40 tests, headless-safe
-├── docs/ARCHITECTURE.md
+├── tests/                          # 86 tests, headless-safe
+├── docs/ARCHITECTURE.md / docs/PARITY.md
 ├── build.py / build_exe.bat        # PyInstaller single-file .exe build
 ├── installer.iss                   # Inno Setup installer definition
 ├── CHANGELOG.md / LICENSE (MIT)
@@ -141,6 +146,20 @@ trade-dashboard-desktop/
   JSON-serializable summary
 - `run_reconcile_demo_job` — paper-ledger vs Robinhood-MCP-mock reconcile
   demo (read-only, deliberate drift; needs `trade-paper`)
+- `run_trades_job` / `trades_to_csv` — trade blotter + CSV export
+  (read-only SQLite FIFO lot matching over the paper ledger)
+- `run_performance_job` — equity/drawdown/monthly/rolling/histogram
+  analytics over paper equity or a backtest result
+- `run_agent_activity_job` — track-record leaderboards, Elo curves, Brier
+  calibration, debate timeline, approval queue
+- `run_network_job` — correlation → MST → single-linkage clusters →
+  seeded Fruchterman-Reingold layout, with regime/breadth/macro overlays
+- `run_risk_monitor_job` — exposures/Herfindahl, vol-regime timeline,
+  kill-switch status, regime-conviction gauge
+
+The five terminal jobs mirror `trade-dashboard-web`'s canonical
+`terminal_service` one-for-one; see `docs/PARITY.md` for exactly which
+terminal views are full, simplified, or static parity on desktop.
 
 `engine.USING_SHARED_ENGINE` is `True` when the implementation is reused from
 `trade-dashboard-web`, `False` when the bundled fallback is active (shown in
@@ -205,8 +224,13 @@ PYTHONPATH=src:../trade-dashboard-web/src:../trade-strategies/src:../trade-backt
   python -m pytest tests/ -q
 ```
 
-40 tests, 1 skipped (the live-widget test needs a display; it runs on dev
-machines and in the packaged Windows app smoke test).
+40 tests → 86 in the full run:
+
+- 58 passed, 28 skipped in standalone mode (no sibling engines; skipped
+  tests need engines or a display),
+- 84 passed, 2 skipped fully connected (shared web engine + all
+  siblings; the 2 skips are display-only widget builds that run on dev
+  machines and in the packaged Windows app smoke test).
 
 ---
 
@@ -216,10 +240,19 @@ See [CHANGELOG.md](CHANGELOG.md). MIT — see [LICENSE](LICENSE).
 
 ## The maths
 
-**What you learn.** Like its web sibling, this dashboard is a thin view over a pure-Python engine: the Backtest Lab reports backtest metrics, the Research Lab renders ten quant-engine results, and the Market Data tab draws candlesticks — all from plain-data computations in `engine/` (or the shared web engine) plus pure chart-scaling math in `ui/charts.py`.
+**What you learn.** Like its web sibling, this dashboard is a thin view over a pure-Python engine: the Backtest Lab reports backtest metrics, the Research Lab renders ten quant-engine results, the Market Data tab draws candlesticks — and the five terminal tabs (Trades, Performance, Agents, Network, Risk Monitor) render the web flagship's canonical analytics from plain-data computations in `engine/` (or the shared web engine) plus pure chart-scaling math in `ui/charts.py`. The web repo (`trade-dashboard-web`) is canonical for every derivation below; the desktop adds no statistics of its own.
 
-**Why it matters.** The engine/UI split is a correctness guarantee: `engine/services.py` carries the same function signatures as the web dashboard's `engine/research_service.py` (a parity test enforces this), and `engine.USING_SHARED_ENGINE` tells you which implementation is live. A backtest or research run gives identical numbers on desktop and web, and identical numbers to the `trade-suite` CLI, because there is one computation per job regardless of the UI in front of it. Heavy jobs run on background threads via `JobRunner`, but the maths is unchanged — threading only moves *where* it runs.
+**Why it matters.** The engine/UI split is a correctness guarantee: `engine/services.py` carries the same function signatures as the web dashboard's `engine/terminal_service.py` (a parity test pins each signature string, and a cross-check test asserts byte-identical results on the deterministic demo paths), and `engine.USING_SHARED_ENGINE` tells you which implementation is live. A blotter, a performance report, or a network graph gives identical numbers on desktop and web, and identical numbers to the `trade-suite` CLI, because there is one computation per job regardless of the UI in front of it. Heavy jobs run on background threads via `JobRunner`, but the maths is unchanged — threading only moves *where* it runs.
 
 **The maths.** Backtests delegate to `trade-backtest` (return, Sharpe, max drawdown, win rate, round-trip trades). The Optimize panel maximizes Sharpe `(wᵀμ)/√(wᵀΣw)` or minimizes variance `wᵀΣw` over sample moments of daily simple returns, subject to a max-weight cap. The Monte Carlo panel fits per-asset `μ`, `σ`, and the correlation matrix from sample moments, simulates correlated GBM paths, and reports VaR/CVaR at the chosen level. The Correlation panel offers sample or Ledoit-Wolf-shrunk covariance (`Σ* = δF + (1−δ)S`, shrinking the sample covariance toward a structured target for stability in small samples). The remaining panels (pairs ADF cointegration, order-book impact, vol-surface fitting, Fama-French regressions with GRS, sentiment lead-lag) delegate to their engines of record. Charting is pure affine scaling: `line_points` maps values to canvas coordinates via `x = pad + i·(W−2·pad)/(n−1)`, `y = H−pad − (v−lo)/span·(H−2·pad)`; `candle_layout` places each bar in its time slot with body `max(1, 0.6·slot)` wide and wicks spanning high–low — all testable without a display.
 
-**Honest limitations.** The dashboard adds no statistics of its own; it inherits the engines' assumptions (GBM VaR, Gaussian-ish Sharpe, sample-moment frontiers). Ledoit-Wolf shrinkage is a bias-variance tradeoff, not free accuracy. Demo data is synthetic; each Research Lab panel carries the same demo caveats as the web dashboard. The bundled fallback engine mirrors the web engine's signatures, not a second independent implementation — new web-engine parameters must be mirrored here by hand.
+Terminal-wave maths (mirrored from the canonical web jobs):
+
+- **Drawdown.** The underwater series is `DD(t) = −(Peak(t) − E(t))/Peak(t) ≤ 0` with `Peak(t)` the running maximum of equity; the summary's max drawdown is the largest peak-to-trough fraction `max(Peak−E)/Peak`. Same definition the web renders.
+- **Rolling Sharpe/vol.** Over a 63-day window of daily returns, annualized vol `σ·√252` and Sharpe `(μ/σ)·√252` with the daily risk-free rate subtracted — plotted as lines, with the first 63 points blank (window not full).
+- **MST network.** Pearson (or Spearman = Pearson on average ranks) correlation of daily simple returns → chordal distance `d = √(2(1−ρ))` → minimum spanning tree via Kruskal → single-linkage clusters by cutting MST edges longer than `d = 1.0` (i.e. ρ < 0.5 — an arbitrary, documented choice, shown in the payload so clusters are never mistaken for discovered structure) → seeded Fruchterman-Reingold layout (300 fixed iterations, deterministic given the seed). Node size is annualized realized vol.
+- **Brier calibration.** Each risk-desk `risk_forecast` (`p_exceed` = P(max drawdown > threshold)) is paired with the later `outcome` for the same idea (`o = 1` if realized max DD exceeded the threshold); observed = mean `o` per forecast-probability bin. The dashed diagonal is perfect calibration.
+- **Elo.** Each `outcome`/`pm_outcome` event is a match against a fixed 1500-rated "market": score 1/0.5/0 by the sign of mean return, expected `E = 1/(1+10^((1500−R)/400))`, update `R += 32·(S−E)`. A dashboard approximation for sparklines — *not* a `trade-agents` engine number (its track-record scores use decayed Sharpe / Brier / penalized-Sharpe formulas).
+- **Exposures / Herfindahl.** Net/gross from ledger fills (mark = last fill price); Herfindahl `Σwᵢ²` over gross weights; beta-adjusted delta assumes β = 1.0 per name because the paper ledger carries no beta model (stated in the payload).
+
+**Honest limitations.** The dashboard adds no statistics of its own; it inherits the engines' assumptions (GBM VaR, Gaussian-ish Sharpe, sample-moment frontiers). Ledoit-Wolf shrinkage is a bias-variance tradeoff, not free accuracy. The network cluster cut and the Elo formula are dashboard conveniences with arbitrary constants — documented, but arbitrary. FIFO lot matching attributes realized P&L to the closing sell only (short-first ledgers not specially handled); the agent filter is a substring match over strategy/order-id because the ledger has no agent column; reconstructed equity (cumulative FIFO realized P&L) is a shape proxy, not true equity. Demo data is synthetic; each terminal tab carries a DEMO banner when the service reports `demo: True`. The bundled fallback engine mirrors the web engine's algorithms, not a second independent implementation — new web-engine parameters must be mirrored here by hand.

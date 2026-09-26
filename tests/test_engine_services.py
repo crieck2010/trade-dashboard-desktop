@@ -133,7 +133,10 @@ def test_research_service_names_exposed():
                  "run_montecarlo_job", "run_vol_surface_job",
                  "run_factor_analysis_job", "run_sentiment_price_job",
                  "run_correlation_job", "run_breadth_job", "run_macro_job",
-                 "run_stream_demo_job", "run_reconcile_demo_job"):
+                 "run_stream_demo_job", "run_reconcile_demo_job",
+                 "run_trades_job", "run_performance_job",
+                 "run_agent_activity_job", "run_network_job",
+                 "run_risk_monitor_job", "trades_to_csv"):
         assert name in engine._SERVICE_NAMES
         assert callable(getattr(engine, name))
 
@@ -361,3 +364,212 @@ def test_research_missing_pairs_engine_hint():
                                    lookback=100)
     finally:
         builtins.__import__ = old
+
+
+# -- terminal wave (fallback services; stdlib-only, demo paths need no engines)
+
+_MISSING = "/definitely/not/here"
+
+_TERMINAL_SIGNATURES = {
+    "run_trades_job":
+        "(ledger_path=None, date_from=None, date_to=None, symbol=None, "
+        "side=None, strategy=None, agent=None, outcome=None, limit=500) -> dict",
+    "run_performance_job":
+        "(source='paper', ledger_path=None, backtest=None, "
+        "backtest_path=None, risk_free=0.0) -> dict",
+    "run_agent_activity_job":
+        "(track_record_path=None, approvals_ledger_path=None, limit=50) -> dict",
+    "run_network_job":
+        "(symbols=None, source='yfinance', days=252, method='pearson', "
+        "seed=7, breadth=None, macro=None, regime=None) -> dict",
+    "run_risk_monitor_job":
+        "(ledger_path=None, hedge_state_path=None, regime=None, vol_days=63) -> dict",
+}
+
+
+def test_terminal_signatures_match_canonical():
+    """Fallbacks carry the exact canonical signatures (eval_str normalized)."""
+    for name, expected in _TERMINAL_SIGNATURES.items():
+        got = str(inspect.signature(getattr(services, name), eval_str=True))
+        assert got == expected, (name, got)
+
+
+def test_terminal_signatures_match_web_engine():
+    """Fallback signatures equal the web canonicals when the web package is present."""
+    web = pytest.importorskip("trade_dashboard_web.engine.terminal_service")
+    for name, expected in _TERMINAL_SIGNATURES.items():
+        got = str(inspect.signature(getattr(web, name), eval_str=True))
+        assert got == expected, (name, got)
+
+
+def test_trades_demo():
+    r = services.run_trades_job(ledger_path=_MISSING, limit=3)
+    assert r["demo"] is True and r["count"] == 12
+    assert len(r["trades"]) == 3
+    assert all(t["demo"] is True for t in r["trades"])
+    assert r["ledger_path"] is None
+    # filters apply to the demo rows too
+    w = services.run_trades_job(ledger_path=_MISSING, symbol="SPY",
+                                outcome="win", limit=50)
+    assert w["count"] < 12 and all(
+        t["symbol"] == "SPY" and t["outcome"] == "win"
+        for t in w["trades"])
+    import json
+
+    json.dumps(r)  # JSON-serializable
+
+
+def test_trades_csv_roundtrip():
+    r = services.run_trades_job(ledger_path=_MISSING, limit=2)
+    text = services.trades_to_csv(r)
+    lines = text.splitlines()
+    assert lines[0].split(",") == [
+        "id", "symbol", "side", "qty", "filled_qty", "avg_fill_price",
+        "commission", "strategy", "state", "created_at", "filled_at",
+        "realized_pnl", "outcome", "demo"]
+    assert len(lines) == 3  # header + 2 rows
+
+
+def test_performance_demo():
+    r = services.run_performance_job(ledger_path=_MISSING)
+    assert r["demo"] is True and r["equity_source"] == "demo"
+    assert len(r["equity"]) == 252
+    assert len(r["drawdown"]) == 252
+    assert all(d <= 0 for d in r["drawdown"])
+    assert r["summary"]["max_drawdown"] >= 0
+    assert r["years"] == [2025]
+    assert len(r["monthly"]) == 1 and len(r["monthly"][0]) == 12
+    assert r["histogram"]["counts"] and sum(r["histogram"]["counts"]) == 251
+    import json
+
+    json.dumps(r)
+    with pytest.raises(ValueError):
+        services.run_performance_job(source="live")
+
+
+def test_performance_backtest_dict():
+    backtest = {
+        "equity": [
+            {"timestamp": "2025-01-02T00:00:00+00:00", "equity": 100.0},
+            {"timestamp": "2025-01-03T00:00:00+00:00", "equity": 110.0}],
+        "trades": [{"pnl": 10.0}],
+    }
+    r = services.run_performance_job(source="backtest", backtest=backtest)
+    assert r["demo"] is False and r["equity_source"] == "backtest"
+    assert r["summary"]["n_trades"] == 1
+    with pytest.raises(ValueError):
+        services.run_performance_job(source="backtest")  # no data at all
+
+
+def test_agent_activity_empty_graceful():
+    r = services.run_agent_activity_job(track_record_path=_MISSING,
+                                        approvals_ledger_path=_MISSING)
+    assert r["leaderboards"] == {"researcher": [], "risk_desk": [], "pm": []}
+    assert r["elo_curves"] == {}
+    assert r["brier"] == {"bins": [], "observed": [], "n": []}
+    assert r["debates"] == [] and r["approval_queue"] == []
+    assert "no track-record JSONL found" in r["message"]
+    import json
+
+    json.dumps(r)
+
+
+def test_network_demo_deterministic():
+    kw = {"source": "demo", "days": 60, "seed": 7}
+    a = services.run_network_job(**kw)
+    b = services.run_network_job(**kw)
+    assert a == b  # deterministic given the seed
+    assert len(a["nodes"]) == 12 and len(a["edges"]) == 11  # n-1 MST edges
+    assert a["params"]["demo"] is True
+    assert a["params"]["correlation_source"] == "stdlib"
+    assert sum(len(c["members"]) for c in a["clusters"]) == 12
+    assert all(-100 <= n["x"] <= 100 and -100 <= n["y"] <= 100
+               for n in a["nodes"])
+    c = services.run_network_job(**{**kw, "method": "spearman"})
+    assert len(c["nodes"]) == 12  # different metric, still a valid network
+    assert c["params"]["correlation_source"] == "stdlib"
+    import json
+
+    json.dumps(a)
+    with pytest.raises(ValueError):
+        services.run_network_job(source="demo", days=10)
+    with pytest.raises(ValueError):
+        services.run_network_job(symbols=["SPY", "QQQ"], source="demo")
+
+
+def test_network_overlays():
+    regime = {"schema_version": 1, "conviction": 72.5, "composite_raw": 0.7,
+              "exposure_scale": 0.8,
+              "hysteresis": {"state": "held", "reason": "within band",
+                             "prior_conviction": 70.0}}
+    r = services.run_network_job(source="demo", days=60, regime=regime)
+    assert r["regime"]["conviction"] == 72.5
+    assert r["regime"]["hysteresis_state"] == "held"
+    assert r["breadth"] is None and r["macro"] is None
+
+
+def test_risk_monitor_demo():
+    r = services.run_risk_monitor_job(ledger_path=_MISSING,
+                                      hedge_state_path=_MISSING)
+    assert r["demo"] is True
+    exp = r["exposures"]
+    assert exp["n_positions"] == 5
+    assert 0.0 < exp["herfindahl"] <= 1.0
+    assert exp["largest_position"]["symbol"] is not None
+    assert r["kill_switch"]["status"] == "unknown"
+    assert r["regime"] is None
+    assert r["vol_regime"]["note"] == "demo mode — no ledger, no vol timeline"
+    import json
+
+    json.dumps(r)
+
+
+def test_risk_monitor_kill_switch_states(tmp_path):
+    import json as _json
+
+    halted = tmp_path / "halted.json"
+    halted.write_text(_json.dumps({"consecutive_halts": 2, "cycles_run": 9}))
+    r = services.run_risk_monitor_job(ledger_path=_MISSING,
+                                      hedge_state_path=str(halted))
+    assert r["kill_switch"]["status"] == "halted"
+    active = tmp_path / "active.json"
+    active.write_text(_json.dumps({"consecutive_halts": 0}))
+    r = services.run_risk_monitor_job(ledger_path=_MISSING,
+                                      hedge_state_path=str(active))
+    assert r["kill_switch"]["status"] == "active"
+
+
+def test_terminal_crosscheck_fallback_matches_web():
+    """Fallback and bound (web) jobs agree exactly on identical inputs."""
+    web = pytest.importorskip("trade_dashboard_web.engine.terminal_service")
+    a = services.run_trades_job(ledger_path=_MISSING, symbol="SPY",
+                                outcome="win", limit=50)
+    b = web.run_trades_job(ledger_path=_MISSING, symbol="SPY",
+                           outcome="win", limit=50)
+    assert a == b
+    a = services.trades_to_csv(services.run_trades_job(ledger_path=_MISSING))
+    b = web.trades_to_csv(web.run_trades_job(ledger_path=_MISSING))
+    assert a == b
+    a = services.run_performance_job(ledger_path=_MISSING)
+    b = web.run_performance_job(ledger_path=_MISSING)
+    assert a == b
+    bt = {"equity": [
+        {"timestamp": "2025-01-02T00:00:00+00:00", "equity": 100.0},
+        {"timestamp": "2025-01-03T00:00:00+00:00", "equity": 105.0}],
+        "trades": [{"realized_pnl": 5.0}]}
+    assert (services.run_performance_job(source="backtest", backtest=bt)
+            == web.run_performance_job(source="backtest", backtest=bt))
+    a = services.run_agent_activity_job(track_record_path=_MISSING,
+                                        approvals_ledger_path=_MISSING)
+    b = web.run_agent_activity_job(track_record_path=_MISSING,
+                                   approvals_ledger_path=_MISSING)
+    assert a == b
+    for kw in ({"source": "demo", "days": 60},
+               {"source": "demo", "days": 60, "method": "spearman",
+                "seed": 42}):
+        assert services.run_network_job(**kw) == web.run_network_job(**kw)
+    a = services.run_risk_monitor_job(ledger_path=_MISSING,
+                                      hedge_state_path=_MISSING)
+    b = web.run_risk_monitor_job(ledger_path=_MISSING,
+                                 hedge_state_path=_MISSING)
+    assert a == b
